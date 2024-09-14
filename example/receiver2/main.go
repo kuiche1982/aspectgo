@@ -1,7 +1,10 @@
+//go:build aspect
+
 package main
 
 import (
 	"fmt"
+
 	"github.com/AkihiroSuda/aspectgo/example/receiver2/pkg1"
 	. "github.com/AkihiroSuda/aspectgo/example/receiver2/pkg1"
 	xpkg1 "github.com/AkihiroSuda/aspectgo/example/receiver2/pkg1"

@@ -1,3 +1,5 @@
+//go:build aspect
+
 package main
 
 import (

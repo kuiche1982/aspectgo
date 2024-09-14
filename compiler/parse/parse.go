@@ -16,22 +16,22 @@ const aspectPackagePath = consts.AspectGoPackagePath + "/aspect"
 
 // AspectFile is the type for an aspect file.
 type AspectFile struct {
-	Filename  string
+	Filenames []string
 	Program   *loader.Program
 	PkgInfo   *loader.PackageInfo
 	Pointcuts map[*types.Named]aspect.Pointcut
 }
 
 // ParseAspectFile parses an aspect file.
-func ParseAspectFile(aspectFilename string) (*AspectFile, error) {
-	prog, pkgInfo, err := _parseAspectFile(aspectFilename)
+func ParseAspectFile(aspectFilenames []string) (*AspectFile, error) {
+	prog, pkgInfo, err := _parseAspectFile(aspectFilenames)
 	if err != nil {
 		return nil, err
 	}
 	pkg := pkgInfo.Pkg
-	if pkg.Name() != "main" {
-		return nil, fmt.Errorf("aspect package name must be main: %s", pkg.Name())
-	}
+	// if pkg.Name() != "main" {
+	// 	return nil, fmt.Errorf("aspect package name must be main: %s", pkg.Name())
+	// }
 	aspectIntf, err := lookupAspectInterface(prog)
 	if err != nil {
 		return nil, err
@@ -41,7 +41,7 @@ func ParseAspectFile(aspectFilename string) (*AspectFile, error) {
 		return nil, err
 	}
 	aspectFile := &AspectFile{
-		Filename:  aspectFilename,
+		Filenames: aspectFilenames,
 		Program:   prog,
 		PkgInfo:   pkgInfo,
 		Pointcuts: make(map[*types.Named]aspect.Pointcut),
@@ -53,11 +53,11 @@ func ParseAspectFile(aspectFilename string) (*AspectFile, error) {
 	return aspectFile, nil
 }
 
-func _parseAspectFile(aspectFilename string) (*loader.Program, *loader.PackageInfo, error) {
+func _parseAspectFile(aspectFilenames []string) (*loader.Program, *loader.PackageInfo, error) {
 	conf := loader.Config{
 		ParserMode: parser.ParseComments,
 	}
-	conf.CreateFromFilenames("main", aspectFilename)
+	conf.CreateFromFilenames("main", aspectFilenames...)
 	prog, err := conf.Load()
 	if err != nil {
 		return nil, nil, err
@@ -70,9 +70,9 @@ func _parseAspectFile(aspectFilename string) (*loader.Program, *loader.PackageIn
 	if len(pkgInfo.Errors) != 0 {
 		return nil, nil, fmt.Errorf("package %s has errors: %v", pkgInfo, pkgInfo.Errors)
 	}
-	if len(pkgInfo.Files) != 1 {
-		return nil, nil, fmt.Errorf("only single aspect file is supported at the moment: %v", pkgInfo.Files)
-	}
+	// if len(pkgInfo.Files) != 1 {
+	// 	return nil, nil, fmt.Errorf("only single aspect file is supported at the moment: %v", pkgInfo.Files)
+	// }
 	return prog, pkgInfo, nil
 }
 
