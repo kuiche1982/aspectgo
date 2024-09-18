@@ -1,3 +1,8 @@
+//go:build aspect
+// +build aspect
+
+//// go:build aspect
+
 package main
 
 import (
@@ -7,7 +12,11 @@ import (
 func sayHello(s string) {
 	fmt.Println("hello " + s)
 }
+func sayHello2(s string) {
+	fmt.Println("hello " + s)
+}
 
 func main() {
 	sayHello("world")
+	sayHello("jim")
 }

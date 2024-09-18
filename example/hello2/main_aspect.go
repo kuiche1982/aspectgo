@@ -15,16 +15,16 @@ type ExampleAspect struct {
 // Executed on compilation-time
 func (a *ExampleAspect) Pointcut() asp.Pointcut {
 	pkg := regexp.QuoteMeta("github.com/AkihiroSuda/aspectgo/example/hello2")
-	s := pkg + ".*"
+	s := pkg + ".sayHello3"
 	return asp.NewCallPointcutFromRegexp(s)
 }
 
 // Executed ONLY on runtime
 func (a *ExampleAspect) Advice(ctx asp.Context) []interface{} {
 	args := ctx.Args()
-	fmt.Println("BEFORE hello")
+	fmt.Println("BEFORE hello2")
 	res := ctx.Call(args)
-	fmt.Println("AFTER hello")
+	fmt.Println("AFTER hello2")
 	return res
 }
 
@@ -39,6 +39,6 @@ func (a *FmtPrintlnAspect) Pointcut() asp.Pointcut {
 
 func (a *FmtPrintlnAspect) Advice(ctx asp.Context) []interface{} {
 	args := ctx.Args()
-	fmt.Fprintf(os.Stderr, "directing to stderr: %s\n", args...)
+	fmt.Fprintf(os.Stderr, "directing2 to stderr: %s\n", args...)
 	return []interface{}{0, nil}
 }

@@ -32,10 +32,10 @@ func Main(args []string) int {
 		fmt.Fprintf(os.Stderr, "No aspect file specified\n")
 		return 1
 	}
-	if f.NArg() >= 2 {
-		fmt.Fprintf(os.Stderr, "Too many aspect files specified: %s\n", f.Args())
-		return 1
-	}
+	// if f.NArg() >= 2 {
+	// 	fmt.Fprintf(os.Stderr, "Too many aspect files specified: %s\n", f.Args())
+	// 	return 1
+	// }
 
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 	util.DebugMode = debug
@@ -43,11 +43,11 @@ func Main(args []string) int {
 		log.Printf("running in debug mode")
 	}
 
-	aspectFile := f.Args()[0]
+	aspectFiles := f.Args()
 	comp := compiler.Compiler{
 		WovenGOPATH:     weave,
 		Target:          target,
-		AspectFilenames: []string{aspectFile},
+		AspectFilenames: aspectFiles,
 	}
 	if err := comp.Do(); err != nil {
 		fmt.Fprintln(os.Stderr, err)

@@ -3,6 +3,7 @@ package weave
 
 import (
 	"go/ast"
+	"go/build"
 	"go/parser"
 	"go/types"
 	"log"
@@ -17,39 +18,45 @@ import (
 )
 
 // Weave weaves aspect files to the target package and emit the woven files to wovenGOPATH.
-func Weave(wovenGOPATH string, target string, af *parse.AspectFile) ([]string, error) {
-	_, prog, err := loadTarget(target)
-	if err != nil {
-		return nil, err
-	}
-	matched, pointcutsByIdent, err := findMatchedThings(prog, af.Pointcuts)
-	if err != nil {
-		return nil, err
-	}
-	if util.DebugMode {
-		log.Printf("Found %d matches", len(matched))
-	}
-	if len(matched) != len(pointcutsByIdent) {
-		log.Fatal("impl error")
-	}
-	if len(matched) == 0 {
-		return []string{}, nil
-	}
+func Weave(wovenGOPATH string, target string, afs []*parse.AspectFile) ([]string, error) {
+	rewriters := []*rewriter{}
+	for _, af := range afs {
+		_, prog, err := loadTarget(target)
+		if err != nil {
+			return nil, err
+		}
+		matched, pointcutsByIdent, err := findMatchedThings(prog, af.Pointcuts)
+		if err != nil {
+			return nil, err
+		}
+		if util.DebugMode {
+			log.Printf("Found %d matches", len(matched))
+		}
+		if len(matched) != len(pointcutsByIdent) {
+			log.Fatal("impl error")
+		}
+		if len(matched) == 0 {
+			return []string{}, nil
+		}
 
-	rewrittenFnames1, err := rewriteAspectFile(wovenGOPATH, af)
+		// rewrittenFnames1, err := rewriteAspectFile(wovenGOPATH, af)
+		// if err != nil {
+		// 	return nil, err
+		// }
+
+		rw := &rewriter{
+			Program:          prog,
+			Matched:          matched,
+			Aspects:          pointcutMapToAspectMap(af.Pointcuts),
+			PointcutsByIdent: pointcutsByIdent,
+		}
+		rewriters = append(rewriters, rw)
+	}
+	rewrittenFnames2, err := rewriteProgram(wovenGOPATH, rewriters[0])
 	if err != nil {
 		return nil, err
 	}
-	rw := &rewriter{
-		Program:          prog,
-		Matched:          matched,
-		Aspects:          pointcutMapToAspectMap(af.Pointcuts),
-		PointcutsByIdent: pointcutsByIdent,
-	}
-	rewrittenFnames2, err := rewriteProgram(wovenGOPATH, rw)
-	if err != nil {
-		return nil, err
-	}
+	rewrittenFnames1 := []string{}
 	return append(rewrittenFnames1, rewrittenFnames2...), nil
 }
 
@@ -99,8 +106,11 @@ func findMatchedThings(prog *loader.Program, pointcuts map[*types.Named]aspect.P
 }
 
 func loadTarget(target string) (*loader.Config, *loader.Program, error) {
+	buldCtx := build.Default
+	buldCtx.ToolTags = append(buldCtx.ToolTags, "aspect")
 	conf := loader.Config{
 		ParserMode: parser.ParseComments,
+		Build:      &buldCtx,
 	}
 	conf.Import(target)
 	prog, err := conf.Load()

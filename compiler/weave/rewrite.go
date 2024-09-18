@@ -35,10 +35,10 @@ func rewriteProgram(wovenGOPATH string, rw *rewriter) ([]string, error) {
 		for _, file := range pkgInfo.Files {
 			rw.currentFile = file
 			posn := rw.Program.Fset.Position(file.Pos())
-			if strings.HasSuffix(posn.Filename, "_aspect.go") {
+			if strings.HasSuffix(posn.Filename, "_aspect.go") || strings.HasSuffix(posn.Filename, "_instrumented.go") {
 				continue
 			}
-			outf, err := gopath.FileForNewGOPATH(posn.Filename,
+			outf, err := gopath.FileForNewGOPATH(strings.ReplaceAll(posn.Filename, ".go", "_instrumented.go"),
 				oldGOPATH, wovenGOPATH)
 			if err != nil {
 				return nil, err
@@ -69,11 +69,12 @@ var gRewriterLastP = 0
 
 // rewriter implements rewrite.Rewriter.
 // usage:
-//  Step 1: instatiate rewriter and call rewriter.init().
-//  Step 2: set rewriter.currentPkg, for each pkg in the program
-//  Step 3: set rewriter.currentFile, for each file in the pkg
-//  Step 4: call rewrite.Rewrite(rewriter, rewriter.currentFile) for rewriting the file
-//  Step 5: call rewriter.AddendumForAstFile() for getting the addendum for the file
+//
+//	Step 1: instatiate rewriter and call rewriter.init().
+//	Step 2: set rewriter.currentPkg, for each pkg in the program
+//	Step 3: set rewriter.currentFile, for each file in the pkg
+//	Step 4: call rewrite.Rewrite(rewriter, rewriter.currentFile) for rewriting the file
+//	Step 5: call rewriter.AddendumForAstFile() for getting the addendum for the file
 type rewriter struct {
 	Program          *loader.Program
 	Matched          map[*ast.Ident]types.Object
@@ -160,12 +161,13 @@ func (r *rewriter) _proxy_body_XArgs(matched types.Object) []ast.Expr {
 }
 
 // _proxy_body_XFunc generates like this:
-// `XFunc: func(_ag_args []interface{}) []interface {} {
-//                _ag_arg0 := _ag_args[0].(string)
-//                sayHello(_ag_arg0)
-//                _ag_res := []interface{}{}
-//                return _ag_res
-//          }`
+//
+//	`XFunc: func(_ag_args []interface{}) []interface {} {
+//	               _ag_arg0 := _ag_args[0].(string)
+//	               sayHello(_ag_arg0)
+//	               _ag_res := []interface{}{}
+//	               return _ag_res
+//	         }`
 func (r *rewriter) _proxy_body_XFunc(node ast.Node, matched types.Object) *ast.FuncLit {
 	sig := matched.Type().(*types.Signature)
 	var xFuncBodyStmts []ast.Stmt
@@ -282,10 +284,7 @@ func (r *rewriter) _proxy_body_callExpr(node ast.Node, matched types.Object, asp
 			X: &ast.UnaryExpr{
 				Op: token.AND,
 				X: &ast.CompositeLit{
-					Type: &ast.SelectorExpr{
-						X:   ast.NewIdent("agaspect"),
-						Sel: ast.NewIdent(asp.Obj().Name()),
-					}}}},
+					Type: ast.NewIdent(asp.Obj().Name())}}},
 		Sel: &ast.Ident{
 			Name: "Advice",
 		}}
@@ -321,14 +320,16 @@ func (r *rewriter) _proxy_body_callExpr(node ast.Node, matched types.Object, asp
 // _proxy_body generates _ag_proxy_func body like this:
 //
 // _ag_res := (&dummyAspect{}).Advice(
-// 	&ContextImpl{
-// 		XArgs: []interface{}{"world"},
-// 		XFunc: func(_ag_args []interface{}) []interface{} {
-// 			_ag_arg0 := _ag_args[0].(string)
-// 			sayHello(_ag_arg0)
-// 			_ag_res := []interface{}{}
-// 			return _ag_res
-// 		}})
+//
+//	&ContextImpl{
+//		XArgs: []interface{}{"world"},
+//		XFunc: func(_ag_args []interface{}) []interface{} {
+//			_ag_arg0 := _ag_args[0].(string)
+//			sayHello(_ag_arg0)
+//			_ag_res := []interface{}{}
+//			return _ag_res
+//		}})
+//
 // _ = _ag_res
 // return
 func (r *rewriter) _proxy_body(node ast.Node, matched types.Object, asp *types.Named) *ast.BlockStmt {
@@ -507,13 +508,15 @@ func (r *rewriter) _pgen_body(matched types.Object, pdecl *ast.FuncDecl) *ast.Bl
 // f := (_ag_pgen_ag_proxy_0(i)) // orig: f := i.Foo
 // f(42)
 //
-// func _ag_pgen_ag_proxy_0(i I) func(int) {
-// 	return func(x int){_ag_proxy_0(i, x)}
-// }
+//	func _ag_pgen_ag_proxy_0(i I) func(int) {
+//		return func(x int){_ag_proxy_0(i, x)}
+//	}
+//
 // ​
-// func _ag_proxy_0(i I, x int) {
-//   ..
-// }
+//
+//	func _ag_proxy_0(i I, x int) {
+//	  ..
+//	}
 func (r *rewriter) _pgen(matched types.Object, pdecl *ast.FuncDecl, pgenName string) *ast.FuncDecl {
 	funcDecl := r._pgen_decl(matched, pdecl, pgenName)
 	funcDecl.Body = r._pgen_body(matched, pdecl)
@@ -561,9 +564,10 @@ func (r *rewriter) _proxy_fix_up(node ast.Node, matched types.Object, pgenName s
 // generated addendum can be obtained via AddendumForASTFile.
 //
 // How it works:
-//   Step 1: calls _proxy for generating _ag_proxy_N addendum
-//   Step 2: calls _pgen for generating _ag_pgen_ag_proxy_N addendum
-//   Step 3: calls _proxy_fix_up for generating the new node
+//
+//	Step 1: calls _proxy for generating _ag_proxy_N addendum
+//	Step 2: calls _pgen for generating _ag_pgen_ag_proxy_N addendum
+//	Step 3: calls _proxy_fix_up for generating the new node
 func (r *rewriter) proxy(node ast.Node, pointcut aspect.Pointcut) ast.Expr {
 	var id *ast.Ident
 	switch n := node.(type) {
@@ -614,11 +618,11 @@ func (r *rewriter) Rewrite(node ast.Node) (ast.Node, rewrite.Rewriter) {
 					Kind:  token.STRING,
 					Value: "\"" + consts.AspectGoPackagePath + "/aspect/rt\"",
 				}},
-			&ast.ImportSpec{
-				Path: &ast.BasicLit{
-					Kind:  token.STRING,
-					Value: "\"agaspect\"",
-				}},
+			// &ast.ImportSpec{
+			// 	Path: &ast.BasicLit{
+			// 		Kind:  token.STRING,
+			// 		Value: "\"agaspect\"",
+			// 	}},
 		}
 		newFile := &ast.File{}
 		newFile.Name = ast.NewIdent(n.Name.Name)
@@ -626,9 +630,9 @@ func (r *rewriter) Rewrite(node ast.Node) (ast.Node, rewrite.Rewriter) {
 			&ast.GenDecl{
 				Tok:   token.IMPORT,
 				Specs: []ast.Spec{newImports[0]}},
-			&ast.GenDecl{
-				Tok:   token.IMPORT,
-				Specs: []ast.Spec{newImports[1]}},
+			// &ast.GenDecl{
+			// 	Tok:   token.IMPORT,
+			// 	Specs: []ast.Spec{newImports[1]}},
 		}, n.Decls...)
 		newFile.Scope = n.Scope
 		newFile.Imports = append(newImports, n.Imports...)

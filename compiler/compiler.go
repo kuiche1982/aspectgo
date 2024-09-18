@@ -3,14 +3,12 @@ package compiler
 
 import (
 	"errors"
-	"fmt"
 	"log"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 
-	"github.com/AkihiroSuda/aspectgo/compiler/gopath"
 	"github.com/AkihiroSuda/aspectgo/compiler/parse"
 	"github.com/AkihiroSuda/aspectgo/compiler/weave"
 )
@@ -38,20 +36,22 @@ func (c *Compiler) Do() error {
 	if c.Target == "" {
 		return errors.New("Target not specified")
 	}
-	if len(c.AspectFilenames) != 1 {
-		return fmt.Errorf("only single aspect file is supported at the moment: %v", c.AspectFilenames)
-	}
-	aspectFilename := c.AspectFilenames[0]
+	// if len(c.AspectFilenames) != 1 {
+	// 	return fmt.Errorf("only single aspect file is supported at the moment: %v", c.AspectFilenames)
+	// }
+
 	oldGOPATH := os.Getenv("GOPATH")
 	if oldGOPATH == "" {
 		return errors.New("GOPATH not set")
 	}
 
 	log.Printf("Phase 1: Parsing the aspects")
-	aspectFile, err := parse.ParseAspectFile(aspectFilename)
+	aspectFiles := []*parse.AspectFile{}
+	aspectFile, err := parse.ParseAspectFile(c.AspectFilenames)
 	if err != nil {
 		return err
 	}
+	aspectFiles = append(aspectFiles, aspectFile)
 
 	log.Printf("Phase 2: Weaving the aspects to the target packages")
 	targets, err := resolveTarget(oldGOPATH, c.Target)
@@ -60,7 +60,7 @@ func (c *Compiler) Do() error {
 	}
 	var writtenFnames []string
 	for _, target := range targets {
-		w, err := weave.Weave(c.WovenGOPATH, target, aspectFile)
+		w, err := weave.Weave(oldGOPATH, target, aspectFiles)
 		if err != nil {
 			return err
 		}
@@ -71,11 +71,11 @@ func (c *Compiler) Do() error {
 		return nil
 	}
 
-	log.Printf("Phase 3: Fixing up GOPATH")
-	err = gopath.FixUp(oldGOPATH, c.WovenGOPATH, writtenFnames)
-	if err != nil {
-		return err
-	}
+	// log.Printf("Phase 3: Fixing up GOPATH")
+	// err = gopath.FixUp(oldGOPATH, c.WovenGOPATH, writtenFnames)
+	// if err != nil {
+	// 	return err
+	// }
 	return nil
 }
 

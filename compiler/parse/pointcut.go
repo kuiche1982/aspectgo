@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"text/template"
 
 	"github.com/AkihiroSuda/aspectgo/aspect"
@@ -17,20 +18,24 @@ import (
 
 // compile the aspect and get Pointcut data
 // steps:
-//  * copy the aspect file to tmp.go
+//   - copy the aspect file to tmp.go
+//
 // * add main() to tmp.go
 // * compile and run tmp.go
 // * parse the output and generate Pointcut data
 func (af *AspectFile) determinePointcuts(aspects []*types.Named) error {
 	// TODO: do them at once
 	for _, aspect := range aspects {
-		dir, err := ioutil.TempDir("", "aspectgo")
+		tmpPath := os.Getenv("GOPATH") + "/src"
+		dir, err := ioutil.TempDir(tmpPath, "aspectgo")
 		if err != nil {
 			return err
 		}
 		defer os.RemoveAll(dir)
-		if err = locateTmpAspectFile(af.Filename, dir); err != nil {
-			return err
+		for _, aspectFileName := range af.Filenames {
+			if err = locateTmpAspectFile(aspectFileName, dir); err != nil {
+				return err
+			}
 		}
 		if err = locateTmpAspectMainFile(aspect.Obj().Name(), dir); err != nil {
 			return err
@@ -51,11 +56,15 @@ func (af *AspectFile) determinePointcuts(aspects []*types.Named) error {
 // locate aspectFilename to dir to determine the pointcut value
 // TODO: eliminate aspectStructure.Advice()
 func locateTmpAspectFile(aspectFilename, dir string) error {
-	tmpAspectFile := filepath.Join(dir, "aspect.go")
+	// tmpAspectFile := filepath.Join(dir, "aspect.go")
+	_, fileName := filepath.Split(aspectFilename)
+	tmpAspectFile := filepath.Join(dir, fileName)
 	cont, err := ioutil.ReadFile(aspectFilename)
 	if err != nil {
 		return err
 	}
+	r := regexp.MustCompile(`package \w+`)
+	cont = r.ReplaceAll(cont, []byte("package main"))
 	if err = ioutil.WriteFile(tmpAspectFile, cont, 0444); err != nil {
 		return err
 	}
@@ -102,13 +111,33 @@ func locateTmpAspectMainFile(aspectStructureName, dir string) error {
 }
 
 func runTmpAspectMain(dir string) (string, error) {
-	cmdName := "go"
-	arg := []string{"run", "main.go", "aspect.go", "result.txt"}
-	cmd := exec.Command(cmdName, arg...)
 	var (
 		stdout bytes.Buffer
 		stderr bytes.Buffer
 	)
+	cmd := exec.Command("go", "mod", "init")
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	cmd.Dir = dir
+	if err := cmd.Run(); err != nil {
+		return "",
+			fmt.Errorf("error while executing %s at %s: %s: %s",
+				"go mod init", dir, err, stderr.String())
+	}
+	cmd = exec.Command("go", "mod", "tidy")
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	cmd.Dir = dir
+	if err := cmd.Run(); err != nil {
+		return "",
+			fmt.Errorf("error while executing %s at %s: %s: %s",
+				"go mod tidy", dir, err, stderr.String())
+	}
+	cmdName := "go"
+	// arg := []string{"run", "main.go", "aspect.go", "result.txt"}
+	arg := []string{"run", "./", "result.txt"}
+	cmd = exec.Command(cmdName, arg...)
+
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	cmd.Dir = dir
